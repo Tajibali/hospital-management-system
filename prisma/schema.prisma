@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DOCTOR
+  STAFF
+}
+
+enum AccountStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AppointmentStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RequesterType {
+  DOCTOR
+  STAFF
+}
+
+enum PersonType {
+  DOCTOR
+  STAFF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+}
+
+model User {
+  id        String        @id @default(cuid()) @map("_id")
+  name      String
+  email     String        @unique
+  password  String
+  phone     String?
+  role      Role
+  photoUrl  String?
+  // Doctors & Staff start PENDING until Admin approves them.
+  // Admin is not stored here at all — it authenticates via ADMIN_EMAIL/ADMIN_PASSWORD env vars.
+  status    AccountStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  doctor Doctor?
+  staff  Staff?
+
+  @@map("users")
+}
+
+model Doctor {
+  id             String   @id @default(cuid()) @map("_id")
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialization String
+  availableDays  String[] // e.g. ["Monday", "Wednesday", "Friday"]
+  qrToken        String   @unique @default(cuid())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  appointments Appointment[]
+  leaves       Leave[]
+  attendances  Attendance[]
+
+  @@map("doctors")
+}
+
+model Staff {
+  id              String   @id @default(cuid()) @map("_id")
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  experienceYears Int
+  qrToken         String   @unique @default(cuid())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  leaves      Leave[]
+  attendances Attendance[]
+
+  @@map("staff")
+}
+
+model Patient {
+  id        String   @id @default(cuid()) @map("_id")
+  name      String
+  email     String?
+  phone     String
+  gender    String?
+  age       Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments Appointment[]
+
+  @@map("patients")
+}
+
+model Appointment {
+  id        String            @id @default(cuid()) @map("_id")
+  patientId String
+  patient   Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId  String
+  doctor    Doctor            @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  date      DateTime
+  time      String
+  reason    String?
+  status    AppointmentStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@map("appointments")
+}
+
+model Leave {
+  id            String        @id @default(cuid()) @map("_id")
+  requesterType RequesterType
+  doctorId      String?
+  doctor        Doctor?       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  staffId       String?
+  staff         Staff?        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date          DateTime
+  reason        String
+  status        LeaveStatus   @default(PENDING)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("leaves")
+}
+
+model Attendance {
+  id         String           @id @default(cuid()) @map("_id")
+  personType PersonType
+  doctorId   String?
+  doctor     Doctor?          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  staffId    String?
+  staff      Staff?           @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date       DateTime         @default(now())
+  status     AttendanceStatus @default(PRESENT)
+
+  @@map("attendances")
+}
